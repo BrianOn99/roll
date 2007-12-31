@@ -14,6 +14,8 @@ First order approximation is junk? I don't care, it is good enough.
 with 0.001 step, falling from 3.06, the ball end up in 2.83 o the left end.
 7.5% error is good enough.
 
+From height 3.06, 0.01 dt step, the ball end in 3.11
+
 TODO:
 ==========
 0. prettier graphic
@@ -34,6 +36,12 @@ import scipy
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from  scipy.optimize import leastsq
+
+def rotate(vec, to_vec):
+    if not any(to_vec):
+        return vec
+    else:
+        return np.linalg.norm(vec) * to_vec / np.linalg.norm(to_vec)
 
 class Runway():
     def __init__(self, fx, derx, fy, dery, prange):
@@ -106,18 +114,19 @@ class System():
         """evolve the system by time dt
         """
         estimatepos = self.obj.getpos() + self.vel * dt
-        print(estimatepos)
         #Find p which give shortest distance between runway and setimated point
         res = scipy.optimize.leastsq(
                 lambda p: self.vectdistance(p[0], estimatepos),
                 [self.p])
-        print(res)
+
         self.p = res[0][0]
         bestpos = np.asarray((self.runway.fx(self.p), self.runway.fy(self.p)))
         midvel = (bestpos - self.obj.getpos()) / dt
         self.obj.setpos(bestpos)
-        self.veldiff = (midvel - self.vel, dt/2)
-        self.vel = midvel + self.veldiff[0]
+        oldvel = self.vel
+
+        # rotate vel to the guessed current velocity direction
+        self.vel = rotate(self.vel, midvel + (midvel - oldvel))
 
         if any(midvel):  # meaning "if it is not null vector", preventing nan
             unitvec = midvel/np.linalg.norm(midvel)  # get the slope as vaetor
