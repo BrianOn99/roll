@@ -1,4 +1,32 @@
 #!/usr/bin/python3
+
+"""
+Show a ball rolling down a roller coaster runway
+The interface defined can adapt to any runway (maybe 3-D, but need some
+adjustment), so I may move it to a library later.
+
+The algorithm is:  there is gravity, and normal reaction, make the ball move,
+first assume no constraint of runway, then assumetthere is, find the shortest
+point to the estimated point, and move the ball there, update velocity, and go
+on ....
+
+First order approximation is junk? I don't care, it is good enough.
+with 0.001 step, falling from 3.06, the ball end up in 2.83 o the left end.
+7.5% error is good enough.
+
+TODO:
+==========
+0. prettier graphic
+1. use abc metaclass for moving objects to ensure they implement the nessary
+method.
+2. customized motion
+
+lower priority:
+3. allow multiple objects
+4. off-the-track motion
+5. command line argument support
+999. energy conservation?
+"""
 import sys
 import math
 import numpy as np
@@ -6,9 +34,6 @@ import scipy
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from  scipy.optimize import leastsq
-
-if sys.argv[0] == "":
-    plt.ion()
 
 class Runway():
     def __init__(self, fx, derx, fy, dery, prange):
@@ -27,9 +52,9 @@ class Runway():
     def plot(self, axes):
         axes.plot(*self.path)
 
+    # There is no use of this function yet.
     def tanvector(self, p):
-        vect = np.array([self.derx(p), self.dery(p)])
-        return vect/np.linalg.norm(vect)
+        return np.array([self.derx(p), self.dery(p)])
 
 
 class Phyobj():
@@ -49,13 +74,14 @@ class System():
     """A system to evolve with a runway and a object
     velocity is dependent on frame, so it should be defined here.
     """
-    def __init__(self, obj, runway, init_vel):
+    def __init__(self, obj, runway, init_vel=(0,0), gravity=(0,-9.8)):
         self.obj = obj
         self.runway = runway
-        self.vel = init_vel  # this dhould be a np array, representing vector
+        self.vel = np.asarray(init_vel)
         self.obj.setpos(np.asarray((self.runway.path[0][0],
                                     self.runway.path[1][0])))
         self.p = self.runway.prange[0]
+        self.gravity = gravity
 
     def plot(self, axes):
         self.runway.plot(axes)
@@ -66,7 +92,25 @@ class System():
         """
         return (self.runway.fx(p) - pos[0], self.runway.fy(p) - pos[1])
 
+    def accelerate(self, obj, dt):
+        """increase the velocity
+        """
+        # obj is not used here, but some day when there is multiple obj
+        # it will be used.
+        # follwing is not most efficient, but more redable.
+ 
+        if any(self.vel):  # meaning "if it is not null vector", preventing nan
+            unitvec = self.vel/np.linalg.norm(self.vel)  # get the slope as vaetor
+        else:
+            tanvec = self.runway.tanvector(self.p)
+            unitvec = tanvec/np.linalg.norm(tanvec)
+
+        accel = np.dot(self.gravity, unitvec) * unitvec  # project vector
+        self.vel += accel * dt
+        
     def step(self, dt):
+        """evolve the system by time dt
+        """
         estimatepos = self.obj.getpos() + self.vel * dt
         print(estimatepos)
         #Find p which give shortest distance between runway and setimated point
@@ -77,11 +121,24 @@ class System():
         self.p = res[0][0]
         bestpos = np.asarray((self.runway.fx(self.p), self.runway.fy(self.p)))
         self.vel = (bestpos - self.obj.getpos()) / dt
+        self.accelerate(self.obj, dt)
         self.obj.setpos(bestpos)
         if hasattr(self.obj, "custom_animate"):
             self.obj.custom_animate()
         return self.obj
 
+    def multistep(self, dt, n):
+        for i in range(n):
+            self.step(dt)
+            #time.sleep(0.2)
+            #plt.draw()
+            #input()
+        plt.draw()
+
+
+if sys.argv[0] == "":
+    plt.ion()
+    import time
 fig = plt.figure(figsize=(1,2))
 ax = fig.add_subplot(111) 
 
@@ -95,7 +152,7 @@ myrunway = Runway(
 
 cir = Ball(color="#ff9197")
 
-mysystem = System(cir, myrunway, (-0.03, -0.03))
+mysystem = System(cir, myrunway, (0.0, 0.0), (0.0, -3.0))  #On Mars?
 mysystem.plot(ax)
 """
 dt = 0.01
