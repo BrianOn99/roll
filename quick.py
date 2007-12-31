@@ -78,6 +78,7 @@ class System():
         self.obj = obj
         self.runway = runway
         self.vel = np.asarray(init_vel)
+        self.veldiff = (np.asarray((0, 0)), 1)  #velocity change over time (1)
         self.obj.setpos(np.asarray((self.runway.path[0][0],
                                     self.runway.path[1][0])))
         self.p = self.runway.prange[0]
@@ -92,19 +93,12 @@ class System():
         """
         return (self.runway.fx(p) - pos[0], self.runway.fy(p) - pos[1])
 
-    def accelerate(self, obj, dt):
+    def accelerate(self, obj, unitvec, dt):
         """increase the velocity
         """
         # obj is not used here, but some day when there is multiple obj
         # it will be used.
         # follwing is not most efficient, but more redable.
- 
-        if any(self.vel):  # meaning "if it is not null vector", preventing nan
-            unitvec = self.vel/np.linalg.norm(self.vel)  # get the slope as vaetor
-        else:
-            tanvec = self.runway.tanvector(self.p)
-            unitvec = tanvec/np.linalg.norm(tanvec)
-
         accel = np.dot(self.gravity, unitvec) * unitvec  # project vector
         self.vel += accel * dt
         
@@ -120,9 +114,18 @@ class System():
         print(res)
         self.p = res[0][0]
         bestpos = np.asarray((self.runway.fx(self.p), self.runway.fy(self.p)))
-        self.vel = (bestpos - self.obj.getpos()) / dt
-        self.accelerate(self.obj, dt)
+        midvel = (bestpos - self.obj.getpos()) / dt
         self.obj.setpos(bestpos)
+        self.veldiff = (midvel - self.vel, dt/2)
+        self.vel = midvel + self.veldiff[0]
+
+        if any(midvel):  # meaning "if it is not null vector", preventing nan
+            unitvec = midvel/np.linalg.norm(midvel)  # get the slope as vaetor
+        else:
+            tanvec = self.runway.tanvector(self.p)
+            unitvec = tanvec/np.linalg.norm(tanvec)
+        self.accelerate(self.obj, unitvec, dt)
+
         if hasattr(self.obj, "custom_animate"):
             self.obj.custom_animate()
         return self.obj
