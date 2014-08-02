@@ -33,13 +33,12 @@ class Runway():
 
 
 class Phyobj():
-    def __init__(self, mass, ke):
+    def __init__(self, mass):
         self.mass = mass
-        self.ke = ke
 
 class Ball(Circle, Phyobj):
-    def __init__(self, mass = 1, ke = 1, xy = 1, radius = 0.1, **kw):
-        Phyobj.__init__(self, mass, ke)
+    def __init__(self, mass = 1, xy = 1, radius = 0.1, **kw):
+        Phyobj.__init__(self, mass)
         Circle.__init__(self, xy, radius, **kw)
     def getpos(self):
         return self.center
@@ -47,32 +46,38 @@ class Ball(Circle, Phyobj):
         self.center = xy
 
 class System():
-    def __init__(self, obj, runway, init_ke):
+    """A system to evolve with a runway and a object
+    velocity is dependent on frame, so it should be defined here.
+    """
+    def __init__(self, obj, runway, init_vel):
         self.obj = obj
         self.runway = runway
-        self.init_ke = init_ke
-        self.init_y = self.runway.path[1][0]
-        self.obj.setpos((self.runway.path[0][0], self.runway.path[1][0]))
+        self.vel = init_vel  # this dhould be a np array, representing vector
+        self.obj.setpos(np.asarray((self.runway.path[0][0],
+                                    self.runway.path[1][0])))
         self.p = self.runway.prange[0]
-    def ke(self):
-        "ke is kinetic energy"
-        return self.init_ke + self.obj.mass * 10 * (self.init_y - self.obj.center[1])
-    def speed(self):
-        return math.sqrt(2 * self.ke()/self.obj.mass)
+
     def plot(self, axes):
         self.runway.plot(axes)
         axes.add_patch(self.obj)
+
     def vectdistance(self, p, pos):
+        """Return the vector form the runway to a point pos as a tuple
+        """
         return (self.runway.fx(p) - pos[0], self.runway.fy(p) - pos[1])
+
     def step(self, dt):
-        estimatepos = (self.obj.getpos() +
-                       self.runway.tanvector(self.p) * self.speed() * dt)
+        estimatepos = self.obj.getpos() + self.vel * dt
+        print(estimatepos)
+        #Find p which give shortest distance between runway and setimated point
         res = scipy.optimize.leastsq(
                 lambda p: self.vectdistance(p[0], estimatepos),
                 [self.p])
+        print(res)
         self.p = res[0][0]
-        self.obj.setpos((self.runway.fx(self.p),
-                         self.runway.fy(self.p)))
+        bestpos = np.asarray((self.runway.fx(self.p), self.runway.fy(self.p)))
+        self.vel = (bestpos - self.obj.getpos()) / dt
+        self.obj.setpos(bestpos)
         if hasattr(self.obj, "custom_animate"):
             self.obj.custom_animate()
         return self.obj
@@ -80,17 +85,17 @@ class System():
 fig = plt.figure(figsize=(1,2))
 ax = fig.add_subplot(111) 
 
+# This is a roller coaster track
 myrunway = Runway(
     lambda p: -p/2 + math.sin(p),
     lambda p: -0.5+ math.cos(p),
     lambda p: (p**2)/9 +math.cos(p),
     lambda p: 2*p/9 - math.sin(p),
-    np.arange(-5, 5, 0.2))
+    np.arange(-5, 5, 0.1))
+
 cir = Ball(color="#ff9197")
 
-# we must have some initial energy, otherwise it won't move, because there is
-# no concept of force in this system
-mysystem = System(cir, myrunway, 0.03)
+mysystem = System(cir, myrunway, (-0.03, -0.03))
 mysystem.plot(ax)
 """
 dt = 0.01
