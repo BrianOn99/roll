@@ -43,6 +43,13 @@ def rotate(vec, to_vec):
     else:
         return np.linalg.norm(vec) * to_vec / np.linalg.norm(to_vec)
 
+def colorfactory():
+    while True:
+        for c in ["#f16745", "#ffc65d", "#7bc8a4", "#93648d", "#404040"]:
+            yield c
+
+colorgen = colorfactory()
+
 class Runway():
     def __init__(self, fx, derx, fy, dery, prange):
         self.fx = fx
@@ -58,7 +65,7 @@ class Runway():
         self.path = (x,y)
 
     def plot(self, axes):
-        axes.plot(*self.path)
+        axes.plot(*self.path, color="#444444", linewidth=1.5)
 
     # There is no use of this function yet.
     def tanvector(self, p):
@@ -153,6 +160,7 @@ if sys.argv[0] == "":
     import time
 fig = plt.figure(figsize=(1,2))
 ax = fig.add_subplot(111) 
+ax.axis("equal")
 
 # This is a roller coaster track
 myrunway = Runway(
@@ -162,7 +170,7 @@ myrunway = Runway(
     lambda p: 2*p/9 - math.sin(p),
     np.arange(-5, 5, 0.1))
 
-cir = Ball(color="#ff9197")
+cir = Ball(color=next(colorgen))
 
 mysystem = System(cir, myrunway, (0.0, 0.0), (0.0, -3.0))  #On Mars?
 mysystem.plot(ax)
