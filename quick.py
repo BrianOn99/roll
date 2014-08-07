@@ -34,6 +34,7 @@ import math
 import numpy as np
 import scipy.optimize
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 from matplotlib.patches import Circle
 
 def rotate(vec, to_vec):
@@ -153,13 +154,12 @@ class System():
     def multistep(self, dt, n):
         for i in range(n):
             self.step(dt)
-        plt.draw()
+        plt.draw()  # only used in interactive mode
 
 
 if sys.argv[0] == "":
     plt.ion()
-    import time
-fig = plt.figure(figsize=(1,2))
+fig = plt.figure()
 ax = fig.add_subplot(111) 
 ax.axis("equal")
 
@@ -176,11 +176,13 @@ cir = Ball(color=next(colorgen))
 
 mysystem = System(cir, myrunway, (0.0, -3.0))  #On Mars?
 mysystem.plot(ax)
-"""
+
 dt = 0.01
 def animate(i):
-    mysystem.step(dt)
-anim = animation.FuncAnimation(fig, animate, init_func=init,
-                                       frames=200, interval=20, blit=True)
-plt.draw()
-"""
+    mysystem.multistep(dt, 5)
+    return (mysystem.obj,)
+
+anim = animation.FuncAnimation(fig, animate, frames=100, interval=100,
+        blit=True, repeat_delay=1000)
+anim.save("roll.mp4")
+plt.show()
