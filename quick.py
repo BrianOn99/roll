@@ -32,10 +32,9 @@ lower priority:
 import sys
 import math
 import numpy as np
-import scipy
+import scipy.optimize
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
-from  scipy.optimize import leastsq
 
 def rotate(vec, to_vec):
     if not any(to_vec):
@@ -50,11 +49,16 @@ def colorfactory():
 
 colorgen = colorfactory()
 
+def notimplement(s):
+    raise NotImplementedError(s)
+
 class Runway():
-    def __init__(self, fx, derx, fy, dery, prange):
+    def __init__(self, prange, fx, fy,
+                 derx=lambda: notimplement("derx"),
+                 dery=lambda: notimplement("dery")):
         self.fx = fx
-        self.derx = derx
         self.fy = fy
+        self.derx = derx
         self.dery = dery
         self.prange = prange
         self.genpath()
@@ -73,12 +77,14 @@ class Runway():
 
 
 class Phyobj():
-    def __init__(self, mass):
+    def __init__(self, mass, init_vel=(0.0,0.0)):
         self.mass = mass
+        self.vel = np.asarray(init_vel)  #velocity relative to the graph
+        self.veldiff = (np.asarray((0, 0)), 1)
 
 class Ball(Circle, Phyobj):
-    def __init__(self, mass = 1, xy = 1, radius = 0.1, **kw):
-        Phyobj.__init__(self, mass)
+    def __init__(self, mass = 1, init_vel=(0.0,0.0), xy = 1, radius = 0.1, **kw):
+        Phyobj.__init__(self, mass, init_vel)
         Circle.__init__(self, xy, radius, **kw)
     def getpos(self):
         return self.center
@@ -88,12 +94,11 @@ class Ball(Circle, Phyobj):
 class System():
     """A system to evolve with a runway and a object
     velocity is dependent on frame, so it should be defined here.
+    The system is at rest relative to the graph
     """
-    def __init__(self, obj, runway, init_vel=(0,0), gravity=(0,-9.8)):
-        self.obj = obj
+    def __init__(self, obj, runway, gravity=(0,-9.8)):
         self.runway = runway
-        self.vel = np.asarray(init_vel)
-        self.veldiff = (np.asarray((0, 0)), 1)  #velocity change over time (1)
+        self.obj = obj
         self.obj.setpos(np.asarray((self.runway.path[0][0],
                                     self.runway.path[1][0])))
         self.p = self.runway.prange[0]
@@ -108,19 +113,17 @@ class System():
         """
         return (self.runway.fx(p) - pos[0], self.runway.fy(p) - pos[1])
 
-    def accelerate(self, obj, unitvec, dt):
+    def accelerate(self, unitvec, dt):
         """increase the velocity
         """
-        # obj is not used here, but some day when there is multiple obj
-        # it will be used.
         # follwing is not most efficient, but more redable.
         accel = np.dot(self.gravity, unitvec) * unitvec  # project vector
-        self.vel += accel * dt
+        self.obj.vel += accel * dt
         
     def step(self, dt):
         """evolve the system by time dt
         """
-        estimatepos = self.obj.getpos() + self.vel * dt
+        estimatepos = self.obj.getpos() + self.obj.vel * dt
         #Find p which give shortest distance between runway and setimated point
         res = scipy.optimize.leastsq(
                 lambda p: self.vectdistance(p[0], estimatepos),
@@ -128,19 +131,20 @@ class System():
 
         self.p = res[0][0]
         bestpos = np.asarray((self.runway.fx(self.p), self.runway.fy(self.p)))
+        print(bestpos)
         midvel = (bestpos - self.obj.getpos()) / dt
         self.obj.setpos(bestpos)
-        oldvel = self.vel
+        oldvel = self.obj.vel
 
         # rotate vel to the guessed current velocity direction
-        self.vel = rotate(self.vel, midvel + (midvel - oldvel))
+        self.obj.vel = rotate(oldvel, midvel + (midvel - oldvel))
 
         if any(midvel):  # meaning "if it is not null vector", preventing nan
             unitvec = midvel/np.linalg.norm(midvel)  # get the slope as vaetor
         else:
             tanvec = self.runway.tanvector(self.p)
             unitvec = tanvec/np.linalg.norm(tanvec)
-        self.accelerate(self.obj, unitvec, dt)
+        self.accelerate(unitvec, dt)
 
         if hasattr(self.obj, "custom_animate"):
             self.obj.custom_animate()
@@ -149,9 +153,6 @@ class System():
     def multistep(self, dt, n):
         for i in range(n):
             self.step(dt)
-            #time.sleep(0.2)
-            #plt.draw()
-            #input()
         plt.draw()
 
 
@@ -164,15 +165,16 @@ ax.axis("equal")
 
 # This is a roller coaster track
 myrunway = Runway(
-    lambda p: -p/2 + math.sin(p),
-    lambda p: -0.5+ math.cos(p),
-    lambda p: (p**2)/9 +math.cos(p),
-    lambda p: 2*p/9 - math.sin(p),
-    np.arange(-5, 5, 0.1))
+    np.arange(-5, 5, 0.1),
+    fx=lambda p: -p/2 + math.sin(p),
+    fy=lambda p: (p**2)/9 +math.cos(p),
+    derx=lambda p: -0.5+ math.cos(p),
+    dery=lambda p: 2*p/9 - math.sin(p))
+    
 
 cir = Ball(color=next(colorgen))
 
-mysystem = System(cir, myrunway, (0.0, 0.0), (0.0, -3.0))  #On Mars?
+mysystem = System(cir, myrunway, (0.0, -3.0))  #On Mars?
 mysystem.plot(ax)
 """
 dt = 0.01
