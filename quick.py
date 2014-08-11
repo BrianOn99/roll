@@ -29,7 +29,9 @@ lower priority:
 5. command line argument support
 999. energy conservation?
 """
+
 import sys
+from abc import ABCMeta, abstractmethod
 import math
 import numpy as np
 import scipy.optimize
@@ -76,15 +78,43 @@ class Runway():
     def tanvector(self, p):
         return np.array([self.derx(p), self.dery(p)])
 
+class Obj_base(metaclass=ABCMeta):
+    @abstractmethod
+    def getpos(self):
+        raise NotImplementedError
+    @abstractmethod
+    def setpos(self):
+        raise NotImplementedError
 
 class Phyobj():
     def __init__(self, mass, init_vel=(0.0,0.0)):
+        super().__init__()
         self.mass = mass
         self.vel = np.asarray(init_vel)  #velocity relative to the graph
         self.veldiff = (np.asarray((0, 0)), 1)
 
-class Ball(Circle, Phyobj):
-    def __init__(self, mass = 1, init_vel=(0.0,0.0), xy = 1, radius = 0.1, **kw):
+    def trymove(self, dt):
+        """try to move only, wont really move
+        """
+        return self.getpos() + self.vel * dt
+
+    def moveto(self, pos, dt):
+        midvel = (pos - self.getpos()) / dt
+        self.setpos(pos)
+        oldvel = self.vel
+        # rotate vel to the guessed current velocity direction
+        self.vel = rotate(oldvel, midvel + (midvel - oldvel))
+        return midvel
+
+    def accelerate(self, unitvec, gravity, dt):
+        """increase the velocity
+        """
+        # follwing is not most efficient, but more redable.
+        accel = np.dot(gravity, unitvec) * unitvec  # project vector
+        self.vel += accel * dt
+        
+class Ball(Circle, Phyobj, Obj_base):
+    def __init__(self, mass = 1, init_vel=(0.0,0.0), xy = (0,0), radius = 0.1, **kw):
         Phyobj.__init__(self, mass, init_vel)
         Circle.__init__(self, xy, radius, **kw)
     def getpos(self):
@@ -114,17 +144,11 @@ class System():
         """
         return (self.runway.fx(p) - pos[0], self.runway.fy(p) - pos[1])
 
-    def accelerate(self, unitvec, dt):
-        """increase the velocity
-        """
-        # follwing is not most efficient, but more redable.
-        accel = np.dot(self.gravity, unitvec) * unitvec  # project vector
-        self.obj.vel += accel * dt
         
     def step(self, dt):
         """evolve the system by time dt
         """
-        estimatepos = self.obj.getpos() + self.obj.vel * dt
+        estimatepos = self.obj.trymove(dt)
         #Find p which give shortest distance between runway and setimated point
         res = scipy.optimize.leastsq(
                 lambda p: self.vectdistance(p[0], estimatepos),
@@ -133,19 +157,14 @@ class System():
         self.p = res[0][0]
         bestpos = np.asarray((self.runway.fx(self.p), self.runway.fy(self.p)))
         print(bestpos)
-        midvel = (bestpos - self.obj.getpos()) / dt
-        self.obj.setpos(bestpos)
-        oldvel = self.obj.vel
-
-        # rotate vel to the guessed current velocity direction
-        self.obj.vel = rotate(oldvel, midvel + (midvel - oldvel))
+        midvel = self.obj.moveto(bestpos, dt)
 
         if any(midvel):  # meaning "if it is not null vector", preventing nan
             unitvec = midvel/np.linalg.norm(midvel)  # get the slope as vaetor
         else:
             tanvec = self.runway.tanvector(self.p)
             unitvec = tanvec/np.linalg.norm(tanvec)
-        self.accelerate(unitvec, dt)
+        self.obj.accelerate(unitvec, self.gravity, dt)
 
         if hasattr(self.obj, "custom_animate"):
             self.obj.custom_animate()
@@ -182,7 +201,7 @@ def animate(i):
     mysystem.multistep(dt, 5)
     return (mysystem.obj,)
 
-anim = animation.FuncAnimation(fig, animate, frames=100, interval=100,
+anim = animation.FuncAnimation(fig, animate, frames=60, interval=100,
         blit=True, repeat_delay=1000)
-anim.save("roll.mp4")
+# anim.save("roll.mp4")
 plt.show()
