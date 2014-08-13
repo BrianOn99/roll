@@ -19,14 +19,12 @@ From height 3.06, 0.01 dt step, the ball end in 3.11
 TODO:
 ==========
 0. prettier graphic
-1. use abc metaclass for moving objects to ensure they implement the nessary
-method.
-2. customized motion
+1. customized motion
 
 lower priority:
-3. allow multiple objects
-4. off-the-track motion
-5. command line argument support
+2. allow multiple objects
+3. off-the-track motion
+4. command line argument support
 999. energy conservation?
 """
 
@@ -86,7 +84,7 @@ class Obj_base(metaclass=ABCMeta):
     def setpos(self):
         raise NotImplementedError
 
-class Phyobj():
+class Phyobj(Obj_base):
     def __init__(self, mass, init_vel=(0.0,0.0)):
         super().__init__()
         self.mass = mass
@@ -113,19 +111,46 @@ class Phyobj():
         accel = np.dot(gravity, unitvec) * unitvec  # project vector
         self.vel += accel * dt
         
-class Ball(Circle, Phyobj, Obj_base):
-    def __init__(self, mass = 1, init_vel=(0.0,0.0), xy = (0,0), radius = 0.1, **kw):
+class Merry(Phyobj):
+    def __init__(self, mass = 1, init_vel=(0.0,0.0), xy = (0,0), radius = 0.15, **kw):
         Phyobj.__init__(self, mass, init_vel)
-        Circle.__init__(self, xy, radius, **kw)
+        self.center = xy
+        self.ballprops = {"orbit_radius" : 0,
+                          "angle" : 0,
+                          "balls" : [ Circle(xy, radius, color=next(colorgen))
+                                      for x in range(3) ]
+                         }
+
+    def patches(self):
+        return self.ballprops["balls"]
+
+    def show(self, axes):
+        for b in self.ballprops["balls"]:
+            axes.add_patch(b)
+
+    def anglechanged(self, dt):
+        return (np.linalg.norm(self.vel) * 6 * dt) ** 1.3
+
+    def genradius(self):
+        return np.linalg.norm(self.vel) * 0.05
+
     def getpos(self):
         return self.center
+
     def setpos(self, xy):
         self.center = xy
 
+    def custom_animate(self, dt):
+        self.ballprops["orbit_radius"] = self.genradius()
+        self.ballprops["angle"] += self.anglechanged(dt)
+        for i, b in enumerate(self.ballprops["balls"]):
+            angle = self.ballprops["angle"] + (2 * math.pi * i/3)
+            offset = (self.ballprops["orbit_radius"] *
+                         np.array([math.cos(angle), math.sin(angle)]))
+            b.center = self.getpos() + offset
+
 class System():
-    """A system to evolve with a runway and a object
-    velocity is dependent on frame, so it should be defined here.
-    The system is at rest relative to the graph
+    """The system is at rest relative to the graph
     """
     def __init__(self, obj, runway, gravity=(0,-9.8)):
         self.runway = runway
@@ -137,7 +162,8 @@ class System():
 
     def plot(self, axes):
         self.runway.plot(axes)
-        axes.add_patch(self.obj)
+        #axes.add_patch(self.obj)
+        self.obj.show(axes)
 
     def vectdistance(self, p, pos):
         """Return the vector form the runway to a point pos as a tuple
@@ -167,8 +193,8 @@ class System():
         self.obj.accelerate(unitvec, self.gravity, dt)
 
         if hasattr(self.obj, "custom_animate"):
-            self.obj.custom_animate()
-        return self.obj
+            self.obj.custom_animate(dt)
+        return self.obj.patches()
 
     def multistep(self, dt, n):
         for i in range(n):
@@ -185,23 +211,22 @@ ax.axis("equal")
 # This is a roller coaster track
 myrunway = Runway(
     np.arange(-5, 5, 0.1),
-    fx=lambda p: -p/2 + math.sin(p),
+    fx=lambda p: -p/2.8 + math.sin(p),
     fy=lambda p: (p**2)/9 +math.cos(p),
     derx=lambda p: -0.5+ math.cos(p),
     dery=lambda p: 2*p/9 - math.sin(p))
     
+cir = Merry()
 
-cir = Ball(color=next(colorgen))
-
-mysystem = System(cir, myrunway, (0.0, -3.0))  #On Mars?
+mysystem = System(cir, myrunway, (0.0, -4.0))  #On Mars?
 mysystem.plot(ax)
 
-dt = 0.01
+dt = 0.005
 def animate(i):
-    mysystem.multistep(dt, 5)
-    return (mysystem.obj,)
+    mysystem.multistep(dt, 8)
+    return mysystem.obj.patches()
 
-anim = animation.FuncAnimation(fig, animate, frames=60, interval=100,
-        blit=True, repeat_delay=1000)
+anim = animation.FuncAnimation(fig, animate, frames=180, interval=30,
+        blit=True, repeat_delay=3000)
 # anim.save("roll.mp4")
 plt.show()
