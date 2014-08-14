@@ -133,7 +133,7 @@ class Merry(Phyobj):
         return (np.linalg.norm(self.vel) * 6 * dt) ** 1.3
 
     def genradius(self):
-        return np.linalg.norm(self.vel) * 0.05
+        return np.linalg.norm(self.vel) * 0.07
 
     def getpos(self):
         return self.center
@@ -228,7 +228,7 @@ myrunway = Runway(
     
 cir = Merry(init_vel=np.array([0.0,0.0]))
 
-mysystem = System(cir, myrunway, (0.0, -4.0))  #On Mars?
+mysystem = System(cir, myrunway, (0.0, -2.5))  #On Mars?
 mysystem.plot(ax)
 
 dt = 0.005
@@ -236,7 +236,7 @@ def animate(i):
     mysystem.multistep(dt, 8)
     return mysystem.obj.patches()
 
-anim = animation.FuncAnimation(fig, animate, frames=100, interval=60,
+anim = animation.FuncAnimation(fig, animate, frames=250, interval=40,
         blit=True, repeat_delay=3000)
-#anim.save("roll.mp4")
-plt.show()
+anim.save("roll.mp4", fps=40, extra_args=['-vcodec', 'libx264'])
+#plt.show()
