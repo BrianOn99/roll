@@ -45,7 +45,8 @@ def rotate(vec, to_vec):
 
 def colorfactory():
     while True:
-        for c in ["#f16745", "#ffc65d", "#7bc8a4", "#93648d", "#404040"]:
+        #for c in ["#f16745", "#ffc65d", "#7bc8a4", "#93648d", "#404040"]:
+        for c in ["#FF7D7D", "#88FF7D", "#FFFC3D", "#7DFFF8", "#D8BAFF"]:
             yield c
 
 colorgen = colorfactory()
@@ -70,7 +71,7 @@ class Runway():
         self.path = (x,y)
 
     def plot(self, axes):
-        axes.plot(*self.path, color="#444444", linewidth=1.5)
+        axes.plot(*self.path, color="#EEEEEE", linewidth=2.5)
 
     # There is no use of this function yet.
     def tanvector(self, p):
@@ -101,7 +102,7 @@ class Phyobj(Obj_base):
         self.setpos(pos)
         oldvel = self.vel
         # rotate vel to the guessed current velocity direction
-        self.vel = rotate(oldvel, midvel + (midvel - oldvel))
+        self.vel = rotate(oldvel, midvel)
         return midvel
 
     def accelerate(self, unitvec, gravity, dt):
@@ -182,7 +183,7 @@ class System():
 
         self.p = res[0][0]
         bestpos = np.asarray((self.runway.fx(self.p), self.runway.fy(self.p)))
-        print(bestpos)
+        # print(bestpos)
         midvel = self.obj.moveto(bestpos, dt)
 
         if any(midvel):  # meaning "if it is not null vector", preventing nan
@@ -205,7 +206,9 @@ class System():
 if sys.argv[0] == "":
     plt.ion()
 fig = plt.figure()
-ax = fig.add_subplot(111) 
+ax = fig.add_subplot(111, axisbg="#222222") 
+ax.xaxis.set_visible(False)
+ax.yaxis.set_visible(False)
 ax.axis("equal")
 
 # This is a roller coaster track
@@ -215,8 +218,15 @@ myrunway = Runway(
     fy=lambda p: (p**2)/9 +math.cos(p),
     derx=lambda p: -0.5+ math.cos(p),
     dery=lambda p: 2*p/9 - math.sin(p))
+'''
+myrunway = Runway(
+    np.arange(0, 2*3.14, 0.1),
+    fx=lambda p: 2.5*math.sin(p),
+    fy=lambda p: 3*math.cos(p))
+    '''
+
     
-cir = Merry()
+cir = Merry(init_vel=np.array([0.0,0.0]))
 
 mysystem = System(cir, myrunway, (0.0, -4.0))  #On Mars?
 mysystem.plot(ax)
@@ -226,7 +236,7 @@ def animate(i):
     mysystem.multistep(dt, 8)
     return mysystem.obj.patches()
 
-anim = animation.FuncAnimation(fig, animate, frames=180, interval=30,
+anim = animation.FuncAnimation(fig, animate, frames=100, interval=60,
         blit=True, repeat_delay=3000)
-# anim.save("roll.mp4")
+#anim.save("roll.mp4")
 plt.show()
